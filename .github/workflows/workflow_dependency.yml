@@ -1,0 +1,28 @@
+name: workflow_dependency.yml
+
+on:
+  pull_request:
+    types: [ labeled ]
+
+jobs:
+  checkWorkflowStatus:
+    if: ${{ github.event.label.name == 'deploy_dev' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check Workflow Status
+        run: |
+          # Get the status of the latest workflow run
+          status=$(curl -s -X GET \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/work_on_label.yml/runs?event=pull_request" | jq -r '.workflow_runs[0].conclusion')
+
+          echo "Status of the latest run of test1.yml: $status"
+
+          if [ "$status" = "success" ]; then
+            echo "The test1.yml workflow was successful!"
+            # Your further steps here...
+          else
+            echo "The test1.yml workflow failed or is still in progress."
+            # Handle failure...
+          fi
