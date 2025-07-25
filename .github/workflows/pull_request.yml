@@ -1,0 +1,25 @@
+name: pull request
+
+on :
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - edited
+      - closed
+      - labeled
+
+jobs: 
+  build:
+    runs-on: ubuntu-latest
+
+    steps: 
+      - uses: actions/checkout@v2
+      - name: Run a one-line script
+        run: echo "This is a pull request event"
+      - name: Check if the PR is closed
+        if: ${{ github.event.action == 'closed' }}
+        run: echo "The pull request has been closed."
+      - name: Check if the PR is labeled
+        if: ${{ github.event.action == 'labeled' }}
+        run: echo "A label has been added to the pull request."
