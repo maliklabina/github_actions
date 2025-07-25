@@ -1,0 +1,72 @@
+name: Auto Release from Tags
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  release:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR labels
+        id: labels
+        run: |
+          LABELS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels \
+            | jq -r '.[].name' | tr '\n' ' ')
+          echo "labels=$LABELS" >> $GITHUB_OUTPUT
+
+      - name: Determine bump type
+        id: bump
+        run: |
+          LABELS="${{ steps.labels.outputs.labels }}"
+          if [[ "$LABELS" == *"feature"* ]]; then
+            echo "bump=X" >> $GITHUB_OUTPUT
+          elif [[ "$LABELS" == *"bug"* ]]; then
+            echo "bump=Y" >> $GITHUB_OUTPUT
+          else
+            echo "bump=Z" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get previous tag
+        id: current_version
+        uses: WyriHaximus/github-action-get-previous-tag@v1
+
+      - name: Bump version
+        id: bump_version
+        run: |
+          VERSION="${{ steps.current_version.outputs.tag }}"
+          VERSION="${VERSION#v}"  # Remove leading 'v' if exists
+          IFS='.' read -r X Y Z <<< "$VERSION"
+          BUMP="${{ steps.bump.outputs.bump }}"
+
+          if [[ "$BUMP" == "X" ]]; then
+            X=$((X + 1)); Y=0; Z=0
+          elif [[ "$BUMP" == "Y" ]]; then
+            Y=$((Y + 1)); Z=0
+          else
+            Z=$((Z + 1))
+            if [[ "$Z" -ge 100 ]]; then
+              Z=0
+              Y=$((Y + 1))
+            fi
+          fi
+
+          NEW_VERSION="v$X.$Y.$Z"
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Bumped to $NEW_VERSION"
+
+      - name: "Create release"
+        run: |
+          gh release create ${{ steps.bump_version.outputs.new_version }} \
+            --title ${{ steps.bump_version.outputs.new_version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  
